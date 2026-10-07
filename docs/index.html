@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AlphaBeta</title>
+<style>
+:root{
+  --bg:#14111c; --panel:#1d1829; --panel2:#262035; --line:#35304a;
+  --text:#ece8f5; --sub:#9d96b3; --accent:#ff7eb6; --accent2:#a78bfa;
+  --me:#3b2f66; --ai:#2a2438; --danger:#ff6b6b;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.65 "Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--accent2)}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#1a1024;font-weight:700}
+button.danger{color:var(--danger)}
+button:disabled{opacity:.5;cursor:default}
+input,textarea,select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent2)}
+label{display:block;margin:14px 0 4px;font-weight:700;font-size:13px}
+label small{font-weight:400;color:var(--sub);margin-left:6px}
+
+#app{display:grid;grid-template-columns:300px 1fr;height:100%}
+#side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.brand{padding:16px;font-size:18px;font-weight:800;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+#btnNew{margin:0 14px 10px}
+#list{flex:1;overflow:auto;padding:0 8px}
+.item{display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin:4px 0;padding:10px;border-radius:12px;background:transparent;border:1px solid transparent}
+.item:hover,.item.on{background:var(--panel2);border-color:var(--line)}
+.av{flex:none;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,#4a3a7a,#7a3a62)}
+.item .t{min-width:0}
+.item b{display:block}
+.item small{display:block;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidefoot{display:flex;gap:6px;padding:12px;border-top:1px solid var(--line)}
+.sidefoot button{flex:1;padding:7px 4px;font-size:13px}
+
+#main{min-width:0;min-height:0;display:flex;flex-direction:column}
+.view{flex:1;min-height:0;display:flex;flex-direction:column}
+#vEmpty{align-items:center;justify-content:center;text-align:center;color:var(--sub);padding:24px}
+#vEmpty h2{color:var(--text);margin:0 0 8px}
+#vEditor{overflow:auto;padding:20px}
+.edwrap{max-width:640px;width:100%;margin:0 auto}
+.edwrap h2{margin:0 0 4px}
+.row{display:flex;gap:10px}
+.row>div:first-child{flex:none;width:90px}
+.btns{display:flex;gap:8px;margin:20px 0 40px;flex-wrap:wrap}
+
+.chathead{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.chathead .who{flex:1;min-width:0}
+.chathead .who small{display:block;color:var(--sub);font-size:12px}
+.chathead button{padding:6px 9px;font-size:13px}
+.back{display:none}
+#msgs{flex:1;overflow:auto;padding:18px 14px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:min(720px,86%);padding:10px 14px;border-radius:16px;word-break:break-word}
+.msg.ai{align-self:flex-start;background:var(--ai);border-top-left-radius:4px}
+.msg.me{align-self:flex-end;background:var(--me);border-top-right-radius:4px}
+.msg em{color:#c9b8ff;font-style:normal;opacity:.95}
+.msg.typing::after{content:"▍";color:var(--accent);animation:b 1s steps(2) infinite}
+@keyframes b{50%{opacity:0}}
+#err{margin:0 14px 8px;padding:10px 12px;border:1px solid var(--danger);border-radius:10px;color:#ffc9c9;background:#3a1f28;font-size:13px;white-space:pre-wrap}
+#form{display:flex;gap:8px;padding:10px 14px 14px;border-top:1px solid var(--line);background:var(--panel)}
+#input{resize:none;max-height:160px}
+#demoBar{margin:0 14px;padding:6px 10px;font-size:12px;color:var(--sub);text-align:center}
+
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;padding:20px;width:min(520px,94vw);max-height:90vh}
+dialog::backdrop{background:#000a}
+.help{font-size:12.5px;color:var(--sub);margin-top:6px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:8px 16px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s}
+#toast.on{opacity:1}
+
+@media (max-width:760px){
+  #app{grid-template-columns:1fr}
+  #main{display:none}
+  #app.show-main #side{display:none}
+  #app.show-main #main{display:flex}
+  .back{display:block}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand">✦ AlphaBeta</div>
+    <button id="btnNew" class="primary">＋ キャラを作る</button>
+    <div id="list"></div>
+    <div class="sidefoot">
+      <button id="btnSettings">⚙ 設定</button>
+      <button id="btnExport">書き出し</button>
+      <button id="btnImport">読み込み</button>
+      <input type="file" id="fileImport" accept=".json,application/json" hidden>
+    </div>
+  </aside>
+
+  <main id="main">
+    <section id="vEmpty" class="view">
+      <div><h2>キャラを選ぶか、新しく作ろう</h2><p>左の一覧から選ぶと、続きから物語を遊べます。</p></div>
+    </section>
+
+    <section id="vEditor" class="view" hidden>
+      <div class="edwrap">
+        <button id="edBack" class="back" style="margin-bottom:10px">← 戻る</button>
+        <h2 id="edTitle">キャラを作る</h2>
+        <button id="btnSample" style="margin-top:8px">サンプルを入れてみる</button>
+        <div class="row">
+          <div><label>アイコン</label><input id="fEmoji" maxlength="4" placeholder="🌙"></div>
+          <div style="flex:1"><label>名前</label><input id="fName" placeholder="月ノ瀬 ここあ"></div>
+        </div>
+        <label>性格・口調・見た目<small>キャラの中身。具体的なほど面白くなります</small></label>
+        <textarea id="fPersona" rows="5" placeholder="例：17歳の図書委員。素直じゃないけど世話焼き。語尾は少し冷たいのに、ふとした時に優しい。"></textarea>
+        <label>世界観・今の状況<small>どこで、どんな場面から始まるか</small></label>
+        <textarea id="fWorld" rows="4" placeholder="例：放課後の誰もいない図書室。夕焼けが差している。"></textarea>
+        <label>最初のセリフ・描写<small>空欄ならおまかせ。*で囲むと描写になります</small></label>
+        <textarea id="fFirst" rows="3" placeholder="例：*本から顔を上げて* 「……まだいたの？ 閉めるよ、もう」"></textarea>
+        <div class="row">
+          <div style="width:auto;flex:1"><label>あなたの名前</label><input id="fUser" placeholder="あなた"></div>
+        </div>
+        <label>あなたの設定<small>任意。キャラから見たあなた</small></label>
+        <textarea id="fUserPersona" rows="2" placeholder="例：同じクラスの男子。いつも図書室で居眠りしている。"></textarea>
+        <div class="btns">
+          <button id="edSave" class="primary">保存して遊ぶ</button>
+          <button id="edCancel">キャンセル</button>
+          <button id="edDelete" class="danger" hidden>このキャラを削除</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="vChat" class="view" hidden>
+      <header class="chathead">
+        <button id="btnBack" class="back">←</button>
+        <div class="av" id="chAv"></div>
+        <div class="who"><b id="chName"></b><small id="chMode"></small></div>
+        <button id="btnRegen" title="最後の返事を作り直す">⟲ 作り直し</button>
+        <button id="btnUndo" title="1往復戻る">↶ 戻る</button>
+        <button id="btnReset" title="最初からやり直す">↺ 最初から</button>
+        <button id="btnEditChar">設定</button>
+      </header>
+      <div id="demoBar" hidden>デモモード：まだAIにつながっていません。左下の「⚙ 設定」からつなげます。</div>
+      <div id="msgs"></div>
+      <div id="err" hidden></div>
+      <form id="form">
+        <textarea id="input" rows="1" placeholder="メッセージを入力（Enterで送信 / Shift+Enterで改行）"></textarea>
+        <button id="btnSend" class="primary" type="submit">送信</button>
+      </form>
+    </section>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <h3 style="margin:0 0 4px">AIのつなぎ方</h3>
+  <label>つなぐ先</label>
+  <select id="sProvider">
+    <option value="demo">デモ（AIなし・動作確認用）</option>
+    <option value="ollama">Ollama（自分のPCで動かす）</option>
+    <option value="lmstudio">LM Studio（自分のPCで動かす）</option>
+    <option value="openrouter">OpenRouter</option>
+    <option value="gemini">Google Gemini（OpenAI互換）</option>
+    <option value="custom">その他（OpenAI互換API）</option>
+  </select>
+  <div class="help" id="sHelp"></div>
+  <div id="sNet">
+    <label>API URL</label><input id="sUrl" placeholder="http://localhost:11434/v1/chat/completions">
+    <label>モデル名</label><input id="sModel" placeholder="gemma3">
+    <label>APIキー<small>ローカルAIなら空でOK</small></label><input id="sKey" type="password" autocomplete="off">
+  </div>
+  <div class="row" style="margin-top:4px">
+    <div style="width:auto;flex:1"><label>ランダムさ（0〜1.5）</label><input id="sTemp" type="number" step="0.1" min="0" max="1.5"></div>
+    <div style="width:auto;flex:1"><label>AIに渡す直近のやりとり数</label><input id="sHist" type="number" step="2" min="4" max="200"></div>
+  </div>
+  <div class="help">APIキーはこのブラウザの中にだけ保存されます（自分用の利用向け）。</div>
+  <div id="sTestOut" class="help" style="min-height:1.5em;color:var(--text)"></div>
+  <div class="btns" style="margin:14px 0 0">
+    <button id="sTest">接続テスト</button>
+    <button id="sSave" class="primary">保存</button>
+    <button id="sClose">閉じる</button>
+  </div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 10);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = s => esc(s)
+  .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+  .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+  .replace(/\n/g, '<br>');
+
+const KEY = 'genericZeta.v1';
+const PRESETS = {
+  demo:      {url:'', model:'', help:'AIなしで画面の動作だけ確かめるモードです。返事は固定のセリフになります。'},
+  ollama:    {url:'http://localhost:11434/v1/chat/completions', model:'gemma3',
+              help:'Ollamaを起動しておきます。モデル名は「ollama list」で見えるものに合わせてください。ブラウザから届かない場合は、環境変数 OLLAMA_ORIGINS に * を設定してOllamaを再起動します。'},
+  lmstudio:  {url:'http://localhost:1234/v1/chat/completions', model:'local-model',
+              help:'LM Studioでモデルを読み込み、ローカルサーバーを起動します。サーバー設定でCORSを有効にしてください。'},
+  openrouter:{url:'https://openrouter.ai/api/v1/chat/completions', model:'',
+              help:'openrouter.aiでAPIキーを作り、モデル名はサイトの一覧からコピーします。料金や無料枠はモデルごとに違います。'},
+  gemini:    {url:'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', model:'gemini-2.5-flash',
+              help:'Google AI Studioで取得したAPIキーを入れます。無料枠の上限や規約は公式で確認してください。モデル名は変わることがあります。'},
+  custom:    {url:'', model:'', help:'OpenAI互換（/v1/chat/completions形式）のAPIなら何でも使えます。'}
+};
+
+const sampleChar = () => ({
+  id: uid(), name: '月ノ瀬 ここあ', emoji: '🌙',
+  persona: '17歳の図書委員。素直じゃないけど世話焼きで、口調はそっけない。でも相手が困っているとつい手を貸してしまう。照れると早口になる。',
+  world: '放課後の誰もいない図書室。窓から夕焼けが差している。閉館時間が近い。',
+  first: '*本から顔を上げて、ちらりとこちらを見る* 「……まだいたの？ もう閉めるんだけど」',
+  userName: 'あなた',
+  userPersona: '同じクラスの生徒。よく図書室で居眠りしている。'
+});
+const defaultDB = () => ({
+  settings: {provider:'demo', url:'', model:'', key:'', temp:0.9, hist:30},
+  chars: [], chats: {}
+});
+let db = load();
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && Array.isArray(d.chars)) {
+      const base = defaultDB();
+      return {settings:{...base.settings, ...(d.settings||{})}, chars:d.chars, chats:d.chats||{}};
+    }
+  } catch (e) {}
+  const d = defaultDB();
+  const c = sampleChar();
+  d.chars.push(c);
+  d.chats[c.id] = [{role:'assistant', content: sub(c.first, c)}];
+  return d;
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch (e) { toast('保存に失敗しました（ブラウザの保存領域を確認してください）'); }
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 2200);
+}
+function sub(text, c) {
+  return (text || '').replaceAll('{{user}}', c.userName || 'あなた').replaceAll('{{char}}', c.name);
+}
+
+/* ---------- 画面切り替え ---------- */
+let curId = null, editingId = null, busy = false, ctrl = null;
+const views = ['vEmpty', 'vEditor', 'vChat'];
+function show(v) {
+  views.forEach(x => $('#' + x).hidden = (x !== v));
+  $('#app').classList.toggle('show-main', v !== 'vEmpty');
+}
+const curChar = () => db.chars.find(c => c.id === curId);
+
+function renderList() {
+  const box = $('#list'); box.innerHTML = '';
+  if (!db.chars.length) { box.innerHTML = '<p style="color:var(--sub);padding:10px">まだキャラがいません。</p>'; return; }
+  db.chars.forEach(c => {
+    const chat = db.chats[c.id] || [];
+    const last = chat.length ? chat[chat.length - 1].content.replace(/\*/g, '') : '';
+    const b = document.createElement('button');
+    b.className = 'item' + (c.id === curId ? ' on' : '');
+    b.innerHTML = `<div class="av">${esc(c.emoji || '🙂')}</div><div class="t"><b>${esc(c.name)}</b><small>${esc(last)}</small></div>`;
+    b.onclick = () => openChat(c.id);
+    box.appendChild(b);
+  });
+}
+
+/* ---------- キャラ作成・編集 ---------- */
+function openEditor(id) {
+  editingId = id || null;
+  const c = id ? db.chars.find(x => x.id === id) : {name:'', emoji:'', persona:'', world:'', first:'', userName:'', userPersona:''};
+  $('#edTitle').textContent = id ? 'キャラを編集' : 'キャラを作る';
+  $('#fName').value = c.name; $('#fEmoji').value = c.emoji; $('#fPersona').value = c.persona;
+  $('#fWorld').value = c.world; $('#fFirst').value = c.first;
+  $('#fUser').value = c.userName; $('#fUserPersona').value = c.userPersona;
+  $('#edDelete').hidden = !id;
+  show('vEditor');
+}
+$('#btnNew').onclick = () => openEditor(null);
+$('#btnSample').onclick = () => {
+  const s = sampleChar();
+  $('#fName').value = s.name; $('#fEmoji').value = s.emoji; $('#fPersona').value = s.persona;
+  $('#fWorld').value = s.world; $('#fFirst').value = s.first;
+  $('#fUser').value = s.userName; $('#fUserPersona').value = s.userPersona;
+};
+$('#edCancel').onclick = $('#edBack').onclick = () => { curId ? openChat(curId) : show('vEmpty'); };
+$('#edSave').onclick = () => {
+  const name = $('#fName').value.trim();
+  if (!name) { toast('名前を入れてください'); return; }
+  const data = {
+    name, emoji: $('#fEmoji').value.trim() || '🙂',
+    persona: $('#fPersona').value.trim(), world: $('#fWorld').value.trim(),
+    first: $('#fFirst').value.trim(),
+    userName: $('#fUser').value.trim() || 'あなた', userPersona: $('#fUserPersona').value.trim()
+  };
+  if (editingId) {
+    Object.assign(db.chars.find(c => c.id === editingId), data);
+    save(); openChat(editingId);
+  } else {
+    const c = {id: uid(), ...data};
+    db.chars.unshift(c);
+    db.chats[c.id] = [{role:'assistant', content: greeting(c)}];
+    save(); openChat(c.id);
+  }
+};
+function greeting(c) {
+  return sub(c.first, c) || `*${c.name}がこちらに気づいて、そっと視線を向ける* 「……あ、来たんだ」`;
+}
+$('#edDelete').onclick = () => {
+  if (!editingId || !confirm('このキャラと会話の記録を削除します。よろしいですか？')) return;
+  db.chars = db.chars.filter(c => c.id !== editingId);
+  delete db.chats[editingId];
+  if (curId === editingId) curId = null;
+  save(); renderList(); show('vEmpty');
+};
+
+/* ---------- チャット ---------- */
+function openChat(id) {
+  if (busy && ctrl) ctrl.abort();
+  curId = id;
+  const c = curChar();
+  $('#chAv').textContent = c.emoji || '🙂';
+  $('#chName').textContent = c.name;
+  updateMode();
+  $('#err').hidden = true;
+  renderChat(); renderList(); show('vChat');
+  setTimeout(() => $('#input').focus(), 50);
+}
+function updateMode() {
+  const s = db.settings;
+  $('#chMode').textContent = s.provider === 'demo' ? 'デモモード' : (s.model || s.provider);
+  $('#demoBar').hidden = s.provider !== 'demo';
+}
+function renderChat() {
+  const box = $('#msgs'); box.innerHTML = '';
+  const chat = db.chats[curId] || [];
+  chat.forEach((m, i) => {
+    const d = document.createElement('div');
+    d.className = 'msg ' + (m.role === 'user' ? 'me' : 'ai');
+    if (busy && i === chat.length - 1 && m.role === 'assistant') d.classList.add('typing');
+    d.innerHTML = fmt(m.content);
+    box.appendChild(d);
+  });
+  box.scrollTop = box.scrollHeight;
+  $('#btnSend').textContent = busy ? '停止' : '送信';
+  $('#btnRegen').disabled = busy; $('#btnUndo').disabled = busy; $('#btnReset').disabled = busy;
+}
+function lastBubble() { return $('#msgs').lastElementChild; }
+
+function buildSystem(c) {
+  const user = c.userName || 'あなた';
+  return [
+    `あなたは物語共創型のロールプレイAIです。キャラクター「${c.name}」として、ユーザー（${user}）と一緒に物語を進めてください。`,
+    '',
+    '# キャラクター設定', sub(c.persona, c) || '（特になし。自然に想像して演じる）',
+    '', '# 世界観・状況', sub(c.world, c) || '（特になし）',
+    '', `# ユーザー（${user}）について`, sub(c.userPersona, c) || '（特になし）',
+    '', '# ルール',
+    `- 常に${c.name}として日本語で返答する。AIであることや設定の存在には触れない。`,
+    '- 行動・表情・情景は *アスタリスクで囲んで* 書き、セリフは「」で書く。',
+    '- 1回の返答は3〜6文程度。ユーザーの発言や行動を勝手に決めない。',
+    '- 物語が止まらないよう、感情や状況を少し動かし、ユーザーが返しやすい形で終える。'
+  ].join('\n');
+}
+
+async function callLLM(messages, onDelta, signal) {
+  const s = db.settings;
+  if (s.provider === 'demo') return demoReply(onDelta, signal);
+  if (!s.url) throw new Error('API URLが設定されていません。「⚙ 設定」で入力してください。');
+  const headers = {'Content-Type': 'application/json'};
+  if (s.key) headers.Authorization = 'Bearer ' + s.key;
+  const body = {model: s.model, messages, stream: true, temperature: Number(s.temp)};
+  const res = await fetch(s.url, {method:'POST', headers, body: JSON.stringify(body), signal});
+  if (!res.ok) throw new Error(`サーバーがエラーを返しました（${res.status}）\n` + (await res.text()).slice(0, 400));
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('event-stream') && !res.body) {
+    const j = await res.json();
+    const t = j.choices?.[0]?.message?.content || '';
+    onDelta(t); return t;
+  }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '', full = '';
+  for (;;) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream:true});
+    const lines = buf.split('\n'); buf = lines.pop();
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      const d = t.slice(5).trim();
+      if (d === '[DONE]') continue;
+      try {
+        const delta = JSON.parse(d).choices?.[0]?.delta?.content;
+        if (delta) { full += delta; onDelta(full); }
+      } catch (e) {}
+    }
+  }
+  return full;
+}
+const DEMO = [
+  '*少しだけ目をそらして* 「……えっと、今はまだ本物のAIにつながってないの。左下の「⚙ 設定」から、つないでみて」',
+  '*小さくうなずく* 「ちゃんと届いてるよ。でも今のわたしは、決まったセリフしか言えないデモなんだ」',
+  '*くすっと笑う* 「続きが気になるでしょ？ AIをつないだら、もっと自由に話せるから」'
+];
+async function demoReply(onDelta, signal) {
+  const t = DEMO[Math.floor(Math.random() * DEMO.length)];
+  let s = '';
+  for (const ch of t) {
+    if (signal.aborted) throw new DOMException('aborted', 'AbortError');
+    s += ch; onDelta(s); await sleep(22);
+  }
+  return s;
+}
+
+function showError(e) {
+  let msg = e.message || String(e);
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+    msg = 'AIに接続できませんでした。\n・AI（Ollama等）が起動しているか\n・API URLが合っているか\n・ブラウザからのアクセス許可（CORS）の設定\nを確認してください。';
+  }
+  const el = $('#err'); el.textContent = msg; el.hidden = false;
+}
+
+async function reply() {
+  const c = curChar(), chat = db.chats[c.id];
+  busy = true; $('#err').hidden = true;
+  const msgs = [{role:'system', content: buildSystem(c)},
+    ...chat.slice(-db.settings.hist).map(m => ({role:m.role, content:m.content}))];
+  chat.push({role:'assistant', content:''});
+  renderChat();
+  const el = lastBubble(); ctrl = new AbortController();
+  const box = $('#msgs');
+  try {
+    const full = await callLLM(msgs, t => {
+      chat[chat.length - 1].content = t; el.innerHTML = fmt(t); box.scrollTop = box.scrollHeight;
+    }, ctrl.signal);
+    chat[chat.length - 1].content = full || '（返事がありませんでした。もう一度試してください）';
+  } catch (e) {
+    if (e.name === 'AbortError') { if (!chat[chat.length - 1].content) chat.pop(); }
+    else { chat.pop(); showError(e); }
+  }
+  busy = false; ctrl = null; save();
+  if (curId === c.id) renderChat();
+  renderList();
+}
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  db.chats[curId].push({role:'user', content:text}); save();
+  $('#input').value = ''; autosize();
+  renderChat();
+  await reply();
+}
+$('#form').onsubmit = e => {
+  e.preventDefault();
+  if (busy && ctrl) { ctrl.abort(); return; }
+  send($('#input').value);
+};
+$('#input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault(); $('#form').requestSubmit();
+  }
+});
+function autosize() { const t = $('#input'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 160) + 'px'; }
+$('#input').addEventListener('input', autosize);
+
+$('#btnRegen').onclick = () => {
+  const chat = db.chats[curId];
+  if (chat.length > 1 && chat[chat.length - 1].role === 'assistant') chat.pop();
+  else if (chat.length <= 1) { toast('最初のセリフは作り直せません。キャラ設定から変えられます'); return; }
+  save(); renderChat(); reply();
+};
+$('#btnUndo').onclick = () => {
+  const chat = db.chats[curId];
+  while (chat.length > 1) { const m = chat.pop(); if (m.role === 'user') break; }
+  save(); renderChat(); renderList();
+};
+$('#btnReset').onclick = () => {
+  if (!confirm('この会話を最初からやり直します。よろしいですか？')) return;
+  db.chats[curId] = [{role:'assistant', content: greeting(curChar())}];
+  save(); renderChat(); renderList();
+};
+$('#btnEditChar').onclick = () => openEditor(curId);
+$('#btnBack').onclick = () => { $('#app').classList.remove('show-main'); };
+
+/* ---------- 設定 ---------- */
+const dlg = $('#dlg');
+function fillSettings() {
+  const s = db.settings;
+  $('#sProvider').value = s.provider; $('#sUrl').value = s.url; $('#sModel').value = s.model;
+  $('#sKey').value = s.key; $('#sTemp').value = s.temp; $('#sHist').value = s.hist;
+  refreshProviderUI(false); $('#sTestOut').textContent = '';
+}
+function refreshProviderUI(applyPreset) {
+  const p = $('#sProvider').value, pr = PRESETS[p];
+  $('#sHelp').textContent = pr.help;
+  $('#sNet').hidden = p === 'demo';
+  if (applyPreset) { $('#sUrl').value = pr.url; $('#sModel').value = pr.model; }
+}
+$('#sProvider').onchange = () => refreshProviderUI(true);
+$('#btnSettings').onclick = () => { fillSettings(); dlg.showModal(); };
+$('#sClose').onclick = () => dlg.close();
+function readSettings() {
+  return {
+    provider: $('#sProvider').value, url: $('#sUrl').value.trim(), model: $('#sModel').value.trim(),
+    key: $('#sKey').value.trim(), temp: Number($('#sTemp').value) || 0.9,
+    hist: Math.max(4, Number($('#sHist').value) || 30)
+  };
+}
+$('#sSave').onclick = () => { db.settings = readSettings(); save(); updateMode(); dlg.close(); toast('設定を保存しました'); };
+$('#sTest').onclick = async () => {
+  const old = db.settings; db.settings = readSettings();
+  const out = $('#sTestOut'); out.textContent = '接続中…';
+  try {
+    const r = await callLLM([{role:'user', content:'こんにちは。一言だけ返事をしてください。'}], () => {}, new AbortController().signal);
+    out.textContent = '成功：' + (r || '（空の返事）').slice(0, 80);
+  } catch (e) {
+    out.textContent = '失敗：' + (/Failed to fetch|NetworkError|Load failed/i.test(e.message) ? '接続できません（起動・URL・CORS設定を確認）' : e.message);
+  }
+  db.settings = old;
+};
+
+/* ---------- 書き出し・読み込み ---------- */
+$('#btnExport').onclick = () => {
+  const data = {...db, settings: {...db.settings, key: ''}};
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}));
+  a.download = 'generic-zeta-backup.json'; a.click(); URL.revokeObjectURL(a.href);
+  toast('書き出しました（APIキーは含まれません）');
+};
+$('#btnImport').onclick = () => $('#fileImport').click();
+$('#fileImport').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!Array.isArray(d.chars)) throw new Error('形式が違います');
+    if (!confirm('いまのデータを、読み込んだデータで置き換えます。よろしいですか？')) return;
+    const key = db.settings.key;
+    db = {settings:{...defaultDB().settings, ...(d.settings||{}), key}, chars:d.chars, chats:d.chats||{}};
+    curId = null; save(); renderList(); show('vEmpty'); toast('読み込みました');
+  } catch (err) { toast('読み込みに失敗：' + err.message); }
+};
+
+/* ---------- 起動 ---------- */
+renderList();
+show('vEmpty');
+})();
+</script>
+</body>
+</html>
